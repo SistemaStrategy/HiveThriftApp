@@ -1,0 +1,4 @@
+# Ignore todo file 
+todo
+node_modules/
+logs/

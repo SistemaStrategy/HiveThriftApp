@@ -1,0 +1,14 @@
+{{>header}}
+<h1>{{page.title}}</h1>
+<div>
+	<form method="post" action="/select">
+		<p>
+		    <label for="statement">Request :</label>
+		    <input type="text" name="statement" id="statement" size="50" />
+		    <button type="submit" value="Submit">Submit</button>
+		</p>
+	</form>
+	{{page.data}}
+</div>
+{{>footer}}
+
