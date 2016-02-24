@@ -8,8 +8,8 @@ var hiveSession, hiveClient;
 /*Define view template and public directory for the app*/
 app.engine('html', mustacheExpress());
 app.set('view engine', 'html');
-app.set('views', __dirname + '/html');
-app.use(express.static( __dirname + '/public'));
+app.set('views', __dirname + '/../views');
+app.use(express.static( __dirname + '/../public'));
 app.use( bodyParser.json() );       // to support JSON-encoded bodies
 app.use(bodyParser.urlencoded({     // to support URL-encoded bodies
   extended: true
@@ -21,66 +21,68 @@ app.setupSession = function (client, session) {
 	hiveClient = client
 }
 
-function handleHiveError (title, err, response) {
-	response.render('error', {
-		head: {title: title},
-		error: {title: 'Hive error', message: err }
-	});
+function renderError(isRest, error, response){
+	if(isRest) {
+		response.writeHead(400, {'Content-Type': 'application/json'});
+		response.end(JSON.stringify(err));
+	} else {
+		response.render('error', {
+			head: {title: 'HiveThriftApp - Error'},
+			error: {title: 'HiveThriftApp - Error', message: err }
+		});
+	}
 }
 
-function handleAppliError (title, message, response) {
-	 response.render('error', {
-		head: {title: 'HiveThriftApp - Error'},
-		error: {title: title, message: message }
-	});
+function renderRestResponse(code, data, response) {
+	response.writeHead(code, {'Content-Type': 'application/json'});
+	response.end(JSON.stringify(data));
 }
 
-app.get('/schemas', function(request, response) {
+/*Define REST API routes*/
+app.get('/:rest?/schemas', function(request, response) {
 
+	/*Define the render method : rest or web page*/
+	var rest = (request.params.rest == 'rest' ? true : false);
+
+	/*Get hive schemas*/
 	hiveClient.getSchemasNames(hiveSession, function (err, resSchema) {
-			if(err) {
-				handleHiveError('Erreur getSchemasNames', err, response);
+
+		if(err) {
+			renderError(rest,err,response);
+		} else {
+			if(rest) {
+				renderRestResponse(200,resSchema,response);
 			} else {
 				response.render('index', {
 					head: {title: 'HiveThriftApp'},
 					page: {title: 'Schema list', data: JSON.stringify(resSchema)}
 				});
 			}
+		}
 	});
+}).get('/rest?/columns/:schema/:table', function(request, response) {
 
-}).get('/columns/:schema/:table', function(request, response) {
+	/*Define the render method : rest or web page*/
+	var rest = (request.params.rest == 'rest' ? true : false);
 
 	var schema = request.params.schema;
 	var table = request.params.table;
 
+	/*Get table columns*/
 	hiveClient.getColumns(hiveSession, schema, table, function (err, resColumns) {
 		if(err) {
-			handleHiveError('Erreur getColumns', err, response);
+			renderError(rest,err,response);
 		} else {
-			response.render('table', {
-				head: {title: 'HiveThriftApp - Table'},
-				page: {title: schema + '.' + table + ' columns ', data: JSON.stringify(resColumns)}
-			});
+			if(rest) {
+				renderRestResponse(200,resColumns,response);
+			} else {
+				response.render('table', {
+					head: {title: 'HiveThriftApp - Table'},
+					page: {title: schema + '.' + table + ' columns ', data: JSON.stringify(resColumns)}
+				});
+			}
 		}
 	});
-
-}).get('/select_all/:schema/:table', function(request, response) {
-
-	var schema = request.params.schema;
-	var table = request.params.table;
-
-	var selectStatement = 'select * from ' + schema + '.' + table;
-	hiveClient.executeSelect(hiveSession, selectStatement, function (err, resData) {
-		if(err) {
-			handleHiveError('Erreur executeSelect', err, response);
-		} else {
-			response.render('table', {
-				head: {title: 'HiveThriftApp - Data'},
-				page: {title: schema + '.' + table + ' data ', data: JSON.stringify(resData)}
-			});
-		}
-	});
-
 }).get('/select', function(request, response) {
 
 	response.render('query', {
@@ -88,22 +90,36 @@ app.get('/schemas', function(request, response) {
 		page: {title: 'Query hive database', data: 'Nothing to display ... '}
 	});
 
-}).post('/select', function(request, response) {
+}).post('/:rest?/select', function(request, response) {
 
-	hiveClient.executeSelect(hiveSession, request.body.statement , function (err, resQuery) {
-		if(err) {
-			handleHiveError('Erreur executeSelect', err, response);
-		} else {
-			response.render('table', {
-				head: {title: 'HiveThriftApp - Query'},
-				page: {title: 'Query hive database', data: JSON.stringify(resQuery)}
-			});
-		}
-	});
+	/*Define the render method : rest or web page*/
+	var rest = (request.params.rest == 'rest' ? true : false);
 
+	/*Check that statement exists*/
+	if(request.body.statement) {
+		hiveClient.executeSelect(hiveSession, request.body.statement , function (err, resQuery) {
+			if(err) {
+				renderError(rest,err,response);
+			} else {
+				if(rest){
+					renderRestResponse(200,resQuery,response);
+				} else {
+					response.render('table', {
+						head: {title: 'HiveThriftApp - Query'},
+						page: {title: 'Query hive database', data: JSON.stringify(resQuery)}
+					});
+				}
+			}
+		});	
+	} else {
+		renderError(rest,'{"message":"Missing \"statement\" POST argument"}',response);
+	}
 }).use(function(request, response, next){
 
-	handleAppliError('Page not found', 'The page you are looking for is not existing ... ', response);
+	response.render('error', {
+			head: {title: 'HiveThriftApp - Error'},
+			error: {title: 'HiveThriftApp - Page not found', message: 'The page you are looking for is not existing ... ' }
+	});
 
 });
 
