@@ -24,11 +24,11 @@ app.setupSession = function (client, session) {
 function renderError(isRest, error, response){
 	if(isRest) {
 		response.writeHead(400, {'Content-Type': 'application/json'});
-		response.end(JSON.stringify(err));
+		response.end(JSON.stringify(error));
 	} else {
 		response.render('error', {
 			head: {title: 'HiveThriftApp - Error'},
-			error: {title: 'HiveThriftApp - Error', message: err }
+			error: {title: 'HiveThriftApp - Error', message: JSON.stringify(error) }
 		});
 	}
 }
